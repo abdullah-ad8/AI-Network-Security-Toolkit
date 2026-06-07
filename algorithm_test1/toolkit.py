@@ -20,13 +20,13 @@ class NetworkScanner:
     def __init__(self, target_network, gateway_ip):
         self.target_network = target_network
         self.gateway_ip = gateway_ip
-        # قائمة بأهم المنافذ التي نبحث عنها
+        # List of key ports to scan for
         self.ports_to_scan = {21: 40, 22: 20, 80: 30, 443: 15, 3389: 50, 5432: 45, 8080: 25}
 
     def run_full_scan(self):
         print(f"\n[*] Initiating LIVE scan on network: {self.target_network}...")
         
-        # 1. اكتشاف الأجهزة عبر بروتوكول ARP
+        # 1. Discover devices via ARP protocol
         arp = ARP(pdst=self.target_network)
         ether = Ether(dst="ff:ff:ff:ff:ff:ff")
         result = srp(ether/arp, timeout=2, verbose=0)[0]
@@ -39,7 +39,7 @@ class NetworkScanner:
 
         network_data = []
 
-        # 2. فحص المنافذ لكل جهاز تم اكتشافه
+        # 2. Scan ports for each discovered device
         for ip in live_hosts:
             print(f"[*] Scanning ports for host: {ip} ...")
             open_ports = []
@@ -48,11 +48,11 @@ class NetworkScanner:
                 response = sr1(packet, timeout=0.5, verbose=0)
                 
                 if response and response.haslayer(TCP) and response.getlayer(TCP).flags == 0x12:
-                    # إرسال حزمة RST لإغلاق الاتصال بأمان
+                    # Send an RST packet to safely close the connection
                     sr1(IP(dst=ip)/TCP(dport=port, flags="R"), timeout=0.5, verbose=0)
                     open_ports.append(port)
 
-            # 3. بناء هيكل الاتصال (بافتراض أن كل الأجهزة متصلة بالراوتر المحلي)
+            # 3. Build connection topology (assuming all devices are connected to the local router)
             if ip != self.gateway_ip:
                 network_data.append({
                     "source": self.gateway_ip,
@@ -93,36 +93,36 @@ class TopologyMapper:
         print("\n[*] Generating Network Topology Visualization...")
         plt.figure(figsize=(10, 7))
         
-        # تحديد طريقة توزيع العقد في الرسم
+        # Determine node layout for drawing
         pos = nx.spring_layout(self.graph, seed=42) 
         
-        # تلوين العقد بناءً على موقعها في مسار الهجوم
+        # Color nodes based on their position in the attack path
         node_colors = []
         for node in self.graph.nodes():
             if attack_path and node == attack_path[0]:
-                node_colors.append('red') # المهاجم
+                node_colors.append('red') # Attacker
             elif attack_path and node == attack_path[-1]:
-                node_colors.append('green') # الهدف (الخادم الحساس)
+                node_colors.append('green') # Target (Sensitive Server)
             elif attack_path and node in attack_path:
-                node_colors.append('orange') # أجهزة وسيطة مخترقة
+                node_colors.append('orange') # Compromised intermediate devices
             else:
-                node_colors.append('skyblue') # أجهزة عادية
+                node_colors.append('skyblue') # Normal devices
                 
-        # رسم العقد والروابط الأساسية
+        # Draw nodes and basic edges
         nx.draw(self.graph, pos, with_labels=True, node_color=node_colors, 
                 node_size=3000, font_size=10, font_weight="bold", edge_color="gray")
         
-        # رسم أوزان الروابط (درجة صعوبة الاختراق)
+        # Draw edge weights (penetration difficulty level)
         edge_labels = nx.get_edge_attributes(self.graph, 'weight')
         nx.draw_networkx_edge_labels(self.graph, pos, edge_labels=edge_labels, font_color='red')
         
-        # تحديد مسار الهجوم بخط عريض أحمر إذا تم اكتشافه
+        # Highlight attack path with a bold red line if discovered
         if attack_path:
             path_edges = list(zip(attack_path, attack_path[1:]))
             nx.draw_networkx_edges(self.graph, pos, edgelist=path_edges, edge_color='red', width=2.5)
             
         plt.title("Network Topology & Vulnerability Attack Path", fontsize=14, fontweight='bold')
-        plt.show() # عرض النافذة التي تحتوي على الرسم   
+        plt.show() # Display the window containing the plot   
 
 # ==========================================
 # 3. Path Analyzer Module (UPDATED WITH BFS)
@@ -211,14 +211,14 @@ class ThreatIntelligence:
 
 class ConsoleRedirector:
     """
-    هذا الكلاس يصطاد مخرجات الـ Print ويوجهها إلى مربع النص في الواجهة.
+    This class intercepts Print outputs and redirects them to the text box in the UI.
     """
     def __init__(self, text_widget):
         self.text_widget = text_widget
 
     def write(self, string):
         self.text_widget.insert("end", string)
-        self.text_widget.see("end") # التمرير التلقائي للأسفل لرؤية أحدث سطر
+        self.text_widget.see("end") # Auto-scroll down to see the latest line
 
     def flush(self):
         pass
@@ -234,20 +234,20 @@ class SecurityDashboard(ctk.CTk):
         self.geometry("1250x850")
         ctk.set_appearance_mode("dark")
 
-        # إخبار البرنامج بتشغيل دالة الإغلاق الآمن عند الضغط على (X)
+        # Instruct the program to run the safe closing function when pressing (X)
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
 
-        # إعدادات تقنية
+        # Technical settings
         self.api_key = "AIzaSyDidTWweGP6-TzfwW9xHYdRg3WnJWlVS0Y"
         self.target_subnet = "192.168.1.1/24"
         self.gateway_ip = "192.168.1.1"
-        self.detected_vulnerability = None # لتخزين بيانات الثغرة المكتشفة
+        self.detected_vulnerability = None # To store detected vulnerability data
 
-       # تقسيم الواجهة (Sidebar & Main Area)
+       # Divide the UI (Sidebar & Main Area)
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        # --- القائمة الجانبية ---
+        # --- Sidebar ---
         self.sidebar = ctk.CTkFrame(self, width=220, corner_radius=0)
         self.sidebar.grid(row=0, column=0, sticky="nsew")
         
@@ -266,35 +266,35 @@ class SecurityDashboard(ctk.CTk):
         self.status_label = ctk.CTkLabel(self.sidebar, text="Status: Waiting", text_color="gray")
         self.status_label.pack(side="bottom", pady=20)
 
-        # --- المنطقة الرئيسية ---
+        # --- Main Area ---
         self.main_frame = ctk.CTkFrame(self)
         self.main_frame.grid(row=0, column=1, padx=20, pady=20, sticky="nsew")
         self.main_frame.grid_columnconfigure(0, weight=1)
         self.main_frame.grid_columnconfigure(1, weight=1)
-        self.main_frame.grid_rowconfigure(0, weight=3) # قسم الرسم والتقرير يأخذ مساحة أكبر
-        self.main_frame.grid_rowconfigure(1, weight=1) # قسم التيرمينال يأخذ مساحة أقل
+        self.main_frame.grid_rowconfigure(0, weight=3) # Plot and report section takes more space
+        self.main_frame.grid_rowconfigure(1, weight=1) # Terminal section takes less space
 
-        # 1. عرض الخريطة (أعلى اليسار)
+        # 1. Map display (Top Left)
         self.graph_frame = ctk.CTkFrame(self.main_frame)
         self.graph_frame.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
         
-        # 2. عرض التقرير (أعلى اليمين)
+        # 2. Report display (Top Right)
         self.report_text = ctk.CTkTextbox(self.main_frame, font=("Consolas", 13))
         self.report_text.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
         self.report_text.insert("0.0", "System ready. Click 'Scan' to begin...")
 
-        # 3. شاشة التيرمينال المباشرة (الأسفل)
+        # 3. Live terminal screen (Bottom)
         self.console_frame = ctk.CTkFrame(self.main_frame)
         self.console_frame.grid(row=1, column=0, columnspan=2, padx=10, pady=10, sticky="nsew")
         self.console_label = ctk.CTkLabel(self.console_frame, text=">_ Live Terminal Output", font=ctk.CTkFont(weight="bold"))
         self.console_label.pack(anchor="w", padx=10, pady=(5, 0))
         
-        # تصميم التيرمينال (أسود وأخضر)
+        # Terminal design (Black and Green)
         self.console_text = ctk.CTkTextbox(self.console_frame, font=("Consolas", 12), text_color="#00FF00", fg_color="#1e1e1e")
         self.console_text.pack(fill="both", expand=True, padx=10, pady=10)
         self.console_text.insert("end", "Initialize Engine...\n")
 
-        # ربط مخرجات النظام (print) بمربع التيرمينال الجديد
+        # Link system outputs (print) to the new terminal box
         sys.stdout = ConsoleRedirector(self.console_text)
         sys.stderr = ConsoleRedirector(self.console_text)
 
@@ -309,18 +309,18 @@ class SecurityDashboard(ctk.CTk):
 
     def on_closing(self):
         """
-        تعمل هذه الدالة عند إغلاق البرنامج للتأكد من قتل كل 
-        العمليات التي تعمل في الخلفية ومنع أخطاء الـ Terminal
+        This function runs when the program closes to ensure all 
+        background threads are killed and prevent Terminal errors
         """
         print("[*] Shutting down AI Toolkit and background threads safely...")
-        self.destroy()  # تدمير الواجهة الرسومية
-        os._exit(0)     # إجبار النظام على إنهاء البايثون وكل الـ Threads فوراً
+        self.destroy()  # Destroy GUI
+        os._exit(0)     # Force the system to terminate Python and all Threads immediately
 
 
 
     def run_full_operation(self):
         try:
-            # 1. الفحص الحي (نستخدم الكلاسات السابقة)
+            # 1. Live scan (using the previous classes)
             scanner = NetworkScanner(self.target_subnet, self.gateway_ip)
             live_data = scanner.run_full_scan()
 
@@ -347,7 +347,7 @@ class SecurityDashboard(ctk.CTk):
             self.after(0, lambda: self.update_ui(graph, best_path, report))
 
         except Exception as e:
-            print(f"\n[-] SYSTEM ERROR: {e}\n") # هذه الـ print ستظهر في واجهة التيرمينال الجديدة
+            print(f"\n[-] SYSTEM ERROR: {e}\n") # This print will appear in the new terminal UI
             self.after(0, lambda: messagebox.showerror("System Error", str(e)))
             self.update_status("Error", "red")
 
@@ -383,35 +383,34 @@ class SecurityDashboard(ctk.CTk):
         self.report_text.delete("0.0", "end")
         self.report_text.insert("0.0", report)
 
-        # حذف الرسم القديم قبل إضافة الجديد
+        # Delete the old plot before adding the new one
         for widget in self.graph_frame.winfo_children():
             if isinstance(widget, FigureCanvasTkAgg): widget.get_tk_widget().destroy()
 
-        # إعداد خلفية الرسم
+        # Set plot background
         fig, ax = plt.subplots(figsize=(10, 5), facecolor="#2b2b2bac")
         ax.set_facecolor("#2b2b2ba5")
         pos = nx.spring_layout(graph)
 
-        # 1. رسم العقد (الأجهزة) وأرقام الـ IP
-        # تم تغيير font_color إلى 'yellow' (أصفر) ليكون واضحاً جداً
-        # تم إضافة node_size=2500 لتكبير الدائرة الزرقاء حتى تسع النص
+        # 1. Draw nodes (devices) and IP numbers
+
         nx.draw(graph, pos, ax=ax, with_labels=True, node_color='#1f538d', 
                 edge_color='gray', font_color='yellow', font_size=10, 
                 font_weight='bold', node_size=4000)
         
-        # 2. رسم الأوزان (Weights) على الروابط
-        # تم إضافتها للواجهة الرسومية بلون أحمر فاتح '#ff4d4d'
+        # 2. Draw edge weights
+
         edge_labels = nx.get_edge_attributes(graph, 'weight')
         nx.draw_networkx_edge_labels(graph, pos, edge_labels=edge_labels, 
                                      font_color="#4dff684c", font_size=20, ax=ax)
         
-        # رسم مسار الهجوم باللون الأحمر العريض إذا وُجد
+        # Draw attack path in bold red if found
         if best_path:
             path_edges = list(zip(best_path, best_path[1:]))
             nx.draw_networkx_edges(graph, pos, edgelist=path_edges, edge_color='#e74c3c', width=3, ax=ax)
-            self.fix_btn.configure(state="normal") # تفعيل زر الإصلاح
+            self.fix_btn.configure(state="normal") # Enable fix button
 
-        # عرض الرسمة على الواجهة
+        # Display the plot on the UI
         canvas = FigureCanvasTkAgg(fig, master=self.graph_frame)
         canvas.draw()
         canvas.get_tk_widget().pack(fill="both", expand=True)
@@ -426,89 +425,8 @@ class SecurityDashboard(ctk.CTk):
 
 
 
-# ==========================================
-# Main Execution Flow
-# ==========================================
-def main():
-    """
-    API_KEY = "AIzaSyDidTWweGP6-TzfwW9xHYdRg3WnJWlVS0Y" # ضع مفتاحك الحقيقي هنا
-    
-    # 1. إعدادات الشبكة المحلية (تأكد من مطابقتها لشبكتك، استخدم ipconfig لمعرفتها)
-    # عادة ما يكون الراوتر 192.168.1.1 أو 192.168.0.1
-    target_subnet = "192.168.1.1/24"
-    gateway_ip = "192.168.1.1" 
-    
-    # 2. تشغيل الفحص الحي
-    scanner = NetworkScanner(target_subnet, gateway_ip)
-    live_network_data = scanner.run_full_scan()
-    
-    # التحقق مما إذا تم اكتشاف أجهزة
-    if not live_network_data:
-        print("[-] No devices found or scan failed. Check your network range and permissions.")
-        return
 
-    # 3. بناء الخريطة باستخدام البيانات الحقيقية
-    mapper = TopologyMapper()
-    attack_graph = mapper.build_graph(live_network_data)
-    
-    analyzer = PathAnalyzer(attack_graph)
-    
-    # نطلب من الخوارزمية البحث عن مسار من الراوتر إلى أي جهاز آخر التقطناه
-    # يمكنك تغيير الهدف لاحقاً لأي IP محدد التقطته الأداة
-    start_point = gateway_ip
-    # ---------------------------------------------------------
-    # NEW LOGIC: Automatically find the absolute weakest target 
-    # (The one with the lowest path cost from the attacker)
-    # ---------------------------------------------------------
-    start_point = gateway_ip
-    
-    best_path = None
-    lowest_cost = float('inf') # نبدأ بقيمة لا نهائية
-    weakest_target = None
-    
-    # Loop through all discovered devices to find the most vulnerable one
-    for device in live_network_data:
-        target = device["target"]
-        path, cost = analyzer.find_shortest_attack_path(start_point, target)
-        
-        # If this target is easier to hack (lower cost), update our target
-        if cost is not None and cost < lowest_cost:
-            lowest_cost = cost
-            weakest_target = target
-            best_path = path
 
-    path_cost = lowest_cost
-    # ---------------------------------------------------------
-    
-
-    # تشغيل تحليل BFS الجديد
-    connectivity_results = analyzer.analyze_connectivity_bfs(start_point)
-    
-    print("\n--- BFS Connectivity Analysis Results ---")
-    print(f"Reachable Devices: {connectivity_results['reachable']}")
-    print(f"Highly Connected Nodes (Critical Hubs): {connectivity_results['highly_connected']}")
-    print(f"Isolated/Edge Devices: {connectivity_results['isolated']}")
-    print("-----------------------------------------")
-    
-    if best_path:
-        print(f"\n[!] VULNERABLE PATH DETECTED: {' -> '.join(best_path)}")
-        print(f"[!] Path Difficulty Cost: {path_cost}\n")
-        
-        ai_module = ThreatIntelligence(API_KEY)
-        # PASS THE LIVE DATA INSTEAD OF THE SIMULATED DATA
-        report = ai_module.generate_report(best_path, path_cost, live_network_data)
-        
-        print("================ AI SECURITY REPORT ================")
-        print(report)
-        print("====================================================")
-        
-        # DRAW THE GRAPH AND HIGHLIGHT THE ATTACK PATH
-        mapper.visualize_network(best_path)
-    else:
-        print("\n[+] Network is secure. No direct path found.")
-        # YOU CAN STILL DRAW THE NETWORK EVEN IF SECURE
-        mapper.visualize_network()
-        """
 
 
 if __name__ == "__main__":
